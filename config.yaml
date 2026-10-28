@@ -29,10 +29,29 @@ history_file: data/history.json
 output_dir: output
 report_dir: output/reports
 
-# LLM 摘要（可选）：配置了 LLM_API_KEY 才启用，否则走代码规则摘要
-llm_provider: deepseek
-llm_model: deepseek-chat
-llm_base_url: https://api.deepseek.com/v1
+# LLM 摘要（可选）：配置了 Key 才启用，否则走代码规则摘要
+# provider 说明：
+#   auto       按已注入的 Key 自动探测（推荐）——有 OPENROUTER_API_KEY 走免费模型，
+#              只有 LLM_API_KEY 则走 DeepSeek
+#   openrouter 强制走 OpenRouter（免费模型需模型名带 :free 后缀）
+#   deepseek   强制走 DeepSeek
+llm_provider: auto
+llm_model: deepseek-chat                    # 非 openrouter 时生效；openrouter 下留空即可
+llm_base_url: https://api.deepseek.com/v1   # 仅非 openrouter 生效（如 DeepSeek）
+# llm_openrouter_base_url: https://openrouter.ai/api/v1   # 需要 EU 区域路由时才配
+
+# OpenRouter 免费模型候选：按顺序尝试，失败自动换下一个（仅 provider=openrouter 时生效）
+# 名单会变，可在 https://openrouter.ai/models?max_price=0 查最新的，或跑
+# python openrouter_free_demo.py list 查看
+llm_models:
+  - nvidia/nemotron-3-ultra-550b-a55b:free   # 550B，100 万上下文，通用最强
+  - poolside/laguna-s-2.1:free               # 实测 2.2s，最快最稳
+  - cohere/north-mini-code:free              # 代码向，较慢
+  - openrouter/free                          # 路由器，自动挑可用免费模型
+
+# 免费模型多为推理模型：max_tokens 太小会被 reasoning 吃光，正文返回空
+llm_temperature: 0.3
+llm_max_tokens: 2048
 
 # 部署（GitHub Action 通过 Secrets 注入，不写在此文件）
 # DEPLOY_HOST / DEPLOY_USER / SSH_PRIVATE_KEY / CADDY_RELOAD_CMD

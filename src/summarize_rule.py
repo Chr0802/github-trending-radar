@@ -76,6 +76,15 @@ def _hype_flags(repo: dict) -> list[str]:
     return flags
 
 
+def derive_metrics(repo: dict) -> dict:
+    """星级档位 + 活跃度，供 LLM 摘要与规则摘要共用（纯计算，不依赖 LLM）。"""
+    stars = int(repo.get("stars_total", 0) or repo.get("stars_period", 0) or 0)
+    return {
+        "star_tier": _star_tier(stars),
+        "active": _active(repo.get("pushed_at", "")),
+    }
+
+
 def summarize_rule(repos: list[dict], config: dict | None = None) -> list[dict]:
     out = []
     for r in repos:
@@ -90,8 +99,7 @@ def summarize_rule(repos: list[dict], config: dict | None = None) -> list[dict]:
             {
                 **r,
                 "domain": domain,
-                "star_tier": _star_tier(stars),
-                "active": _active(r.get("pushed_at", "")),
+                **derive_metrics(r),
                 "hype_flags": _hype_flags(r),
                 "summary": summary,
             }

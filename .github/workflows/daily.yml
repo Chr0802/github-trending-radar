@@ -25,7 +25,11 @@ jobs:
       - name: Collect & Build
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}   # 可选；不配置则走代码规则摘要
+          # 二选一，都不配则走代码规则摘要（不依赖任何 LLM）
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}  # 免费模型，推荐
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}                # DeepSeek 等自有 key
+          # 可留空由 config.yaml 的 auto 自动探测；也可强制指定 deepseek / openrouter
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
         run: python run.py
 
       - name: Commit history & reports
