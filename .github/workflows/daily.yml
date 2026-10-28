@@ -41,7 +41,20 @@ jobs:
           git config user.email "bot@users.noreply.github.com"
           git add data/history.json output/
           git commit -m "chore: daily update $(date +%F)" || echo "no changes"
-          git push
+          # 重试 + rebase：避免与手动 push 并发导致 non-fast-forward 被拒
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push && break
+            echo "push 失败，第 $i 次重试"; sleep 5
+          done
+
+      # 兜底：即使上面 push 失败，报告也能从 Actions 页面下载（保留 7 天）
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trending-report
+          path: output/
+          retention-days: 7
 
       # 部署方式：实例主动拉取（不需 SSH）。
       # Action 只负责把报告 push 到公开仓库；实例上的 cron 定时 git pull 到
