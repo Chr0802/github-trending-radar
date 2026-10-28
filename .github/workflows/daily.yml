@@ -12,8 +12,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,21 +36,6 @@ jobs:
           git commit -m "chore: daily update $(date +%F)" || echo "no changes"
           git push
 
-      - name: Copy to server
-        if: ${{ env.DEPLOY_HOST != '' }}
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "output/."
-          target: "${{ secrets.DEPLOY_DIR }}"
-
-      - name: Reload Caddy
-        if: ${{ env.DEPLOY_HOST != '' }}
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: "caddy reload || sudo caddy reload || true"
+      # 部署方式：实例主动拉取（不需 SSH）。
+      # Action 只负责把报告 push 到公开仓库；实例上的 cron 定时 git pull 到
+      # /var/www/trending，由 Caddy :8080 直接服务。参见 README「实例拉取」。
