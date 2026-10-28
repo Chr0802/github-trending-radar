@@ -9,7 +9,7 @@
 - **每期数量可调**：`config.yaml` 的 `top_n`（默认 10）。
 - **历史存档**：每期独立 `reports/YYYY-MM-DD.html`，`archive.html` 可回看任意往期。
 - **跨期 diff**：标注「🆕 新上榜 / 🔥 连续 N 天」，体现趋势持续性（闭环核心）。
-- **日更**：GitHub Action 每日北京时间 09:00 运行，SSH 直推轻量云。
+- **日更**：GitHub Action 每日北京时间 09:00 生成并 push 报告，实例 cron 每 10 分钟拉取，Caddy 静态服务。
 
 ## 结构
 
@@ -23,7 +23,8 @@ src/generate.py        深色 HTML 生成（index / 当期 / archive）
 run.py                 主流程：采集→摘要→diff→history→HTML
 data/history.json      跨期状态持久化（提交到仓库）
 output/                生成的报告（index.html / archive.html / reports/）
-.github/workflows/     每日 Action + SSH 部署
+deploy/instance-setup.sh  实例侧一键部署脚本（clone + cron）
+.github/workflows/     每日 Action（只 push 仓库，不做 SSH 部署）
 ```
 
 ## 本地运行
@@ -33,25 +34,49 @@ pip install -r requirements.txt
 python run.py                # 可选 GITHUB_TOKEN / LLM_API_KEY 环境变量
 ```
 
-## 部署到轻量云（首次一次性配置）
+## 部署架构（实例主动拉取，无需 SSH）
 
-目标实例已用 Caddy 占用 80 端口（Hermes Agent 服务），报告以**子路径**方式挂到 Caddy：
+```
+GitHub Action: 采集→摘要→生成→git push 公开仓库
+                    ↓
+实例 cron（每 10 分钟）: git pull → 同步 output/ 到 /var/www/trending
+                    ↓
+Caddy :8080 → 公网 http://43.142.34.105:8080/
+```
 
-1. 生成部署专用 SSH 密钥对，公钥加进实例 `~/.ssh/authorized_keys`，私钥存 GitHub Secret `SSH_PRIVATE_KEY`。
-2. 实例上建目录：`mkdir -p /var/www/trending`
-3. 在现有 Caddyfile 内追加（用 `handle_path` 避免抢根路径）：
-   ```
-   handle_path /trending/* {
-       root * /var/www/trending
-       file_server
-   }
-   ```
-   然后 `caddy reload`。
-4. 仓库 Secrets 配置：`DEPLOY_HOST`（公网 IP）、`DEPLOY_USER`、`SSH_PRIVATE_KEY`、`DEPLOY_DIR`（=/var/www/trending）。可选 `LLM_API_KEY`。
+选这个架构的原因：TAT 远程命令对 `.ssh`/敏感文件有硬拦截、SSH 又不通，实例主动拉取可完全绕开，且不受本机网络位置影响。
 
-此后每次 Action 运行会自动 scp `output/` 到实例并 reload Caddy，公网 `http://<IP>/trending/` 即可访问。
+### 首次配置（实例上执行一次）
+
+```bash
+sudo -i
+curl -fsSL https://raw.githubusercontent.com/Chr0802/github-trending-radar/main/deploy/instance-setup.sh -o /tmp/setup.sh
+bash /tmp/setup.sh
+```
+
+脚本会：装 git → 检测 GitHub 连通 → clone 到 `/var/www/trending-repo` → 同步 `output/` 到 `/var/www/trending` → 装 cron 每 10 分钟拉取。
+
+若 `curl` raw 失败（GitHub raw 国内常被卡），改用：
+
+```bash
+cd /tmp && rm -rf github-trending-radar
+git clone https://github.com/Chr0802/github-trending-radar.git
+bash /tmp/github-trending-radar/deploy/instance-setup.sh
+```
+
+### 仓库设置
+
+- **Actions → General → Workflow permissions** 选 **Read and write**（否则 Action 无法 push）
+- 可选：Secrets 加 `LLM_API_KEY`（DeepSeek），摘要质量显著提升
+
+### 访问
+
+- 最新：`http://43.142.34.105:8080/`
+- 历史存档：`http://43.142.34.105:8080/archive.html`
+- 单期：`http://43.142.34.105:8080/reports/2026-10-28.html`
 
 ## 说明
 
 - 采集在 GitHub Action 环境运行（网络正常）；本机直跑若遇 GitHub API TLS 问题需走代理。
 - `history.json` 提交到仓库，历史不依赖服务器存活。
+- 实例上的 Caddy 用独立 `:8080` 站点，不影响原有 Hermes Agent 的 `:80`。
