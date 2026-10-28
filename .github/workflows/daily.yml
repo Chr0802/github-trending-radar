@@ -12,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -30,7 +31,9 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}                # DeepSeek 等自有 key
           # 可留空由 config.yaml 的 auto 自动探测；也可强制指定 deepseek / openrouter
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-        run: python run.py
+          PYTHONUNBUFFERED: "1"        # 实时输出日志，避免看起来「卡住」
+          LLM_BUDGET_SECONDS: "240"    # LLM 总耗时预算（秒），超时自动降级规则摘要
+        run: python -u run.py
 
       - name: Commit history & reports
         run: |

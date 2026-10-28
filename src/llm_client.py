@@ -134,7 +134,7 @@ def chat_json(
     headers: dict | None = None,
     temperature: float = 0.3,
     max_tokens: int = 2048,
-    retries: int = 2,
+    retries: int = 1,
     validate=None,
 ) -> tuple[dict, str]:
     """按 models 顺序尝试，返回 (解析后的 JSON, 实际生效的模型名)。
@@ -147,13 +147,21 @@ def chat_json(
     client = OpenAI(
         api_key=api_key,
         base_url=base_url,
-        timeout=120.0,
+        timeout=40.0,
         max_retries=0,  # 重试策略自己管，避免 SDK 内部重试叠加放大延迟
         default_headers=headers or None,
     )
 
     errors: list[str] = []
+    # 总耗时预算：免费模型可能极慢，超预算直接降级规则摘要，避免 Action 长时间挂起
+    budget = float(os.environ.get("LLM_BUDGET_SECONDS", "240"))
+    deadline = time.time() + budget
     for model in models:
+        if time.time() > deadline:
+            errors.append(f"超出 LLM 总预算 {budget:.0f}s，提前结束")
+            print(f"[llm] 超出总预算 {budget:.0f}s，停止尝试并降级规则摘要", flush=True)
+            break
+        print(f"[llm] 尝试模型 {model}（剩余预算 {deadline - time.time():.0f}s）", flush=True)
         for attempt in range(retries + 1):
             # 第一次带 json_object；若模型不支持会 400，之后降级为纯文本 + 容错解析
             use_json_mode = attempt == 0
