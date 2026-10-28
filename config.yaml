@@ -1,0 +1,39 @@
+# GitHub Trending Radar 配置
+# 所有可调参数集中在此，方便不改代码即可调整采集范围与输出。
+
+top_n: 10                        # 每期入选数量（默认 10，可调）
+frequency: daily                 # 更新频率（仅文档说明，实际由 Action cron 控制）
+timezone: "Asia/Shanghai"
+
+# OSS Insight 按语言拉取热门（period=past_week）
+languages:
+  - Python
+  - Go
+  - Rust
+  - TypeScript
+  - JavaScript
+
+# 领域 topic（GitHub Search API 按 topic 拉，用于补领域标签、不局限安全方向）
+topics:
+  - ai
+  - llm
+  - agent
+  - security
+  - devops
+  - web
+  - rust
+  - rag
+
+# 历史与输出路径（相对仓库根）
+history_file: data/history.json
+output_dir: output
+report_dir: output/reports
+
+# LLM 摘要（可选）：配置了 LLM_API_KEY 才启用，否则走代码规则摘要
+llm_provider: deepseek
+llm_model: deepseek-chat
+llm_base_url: https://api.deepseek.com/v1
+
+# 部署（GitHub Action 通过 Secrets 注入，不写在此文件）
+# DEPLOY_HOST / DEPLOY_USER / SSH_PRIVATE_KEY / CADDY_RELOAD_CMD
+deploy_dir: /var/www/trending
