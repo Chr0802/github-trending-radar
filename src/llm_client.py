@@ -299,3 +299,58 @@ def resolve_settings(config: dict) -> dict | None:
         "api_key": api_key,
         "headers": None,
     }
+
+
+def _make_openrouter(config: dict, key: str) -> dict:
+    models = [m for m in (config.get("llm_models") or []) if m] or list(OPENROUTER_FREE_MODELS)
+    return {
+        "provider": "openrouter",
+        "models": list(models),
+        "base_url": config.get("llm_openrouter_base_url") or OPENROUTER_BASE_URL,
+        "api_key": key,
+        "headers": {
+            "HTTP-Referer": os.environ.get("OPENROUTER_SITE_URL", "https://github.com"),
+            "X-OpenRouter-Title": os.environ.get(
+                "OPENROUTER_SITE_NAME", "github-trending-radar"
+            ),
+        },
+    }
+
+
+def _make_zhipu(config: dict, key: str) -> dict:
+    models = [m for m in (config.get("llm_zhipu_models") or []) if m] or list(ZHIPU_FREE_MODELS)
+    return {
+        "provider": "zhipu",
+        "models": list(models),
+        "base_url": config.get("llm_zhipu_base_url") or ZHIPU_BASE_URL,
+        "api_key": key,
+        "headers": None,
+    }
+
+
+def _make_deepseek(config: dict, key: str) -> dict:
+    return {
+        "provider": "deepseek",
+        "models": [config.get("llm_model") or "deepseek-chat"],
+        "base_url": config.get("llm_base_url") or DEEPSEEK_BASE_URL,
+        "api_key": key,
+        "headers": None,
+    }
+
+
+def fallback_settings(config: dict, exclude_provider: str) -> list[dict]:
+    """主 provider 失败后，按 OpenRouter → 智谱 → DeepSeek 顺序返回其他可用源。"""
+    out: list[dict] = []
+    if exclude_provider != "openrouter":
+        k = os.environ.get("OPENROUTER_API_KEY")
+        if k:
+            out.append(_make_openrouter(config, k))
+    if exclude_provider != "zhipu":
+        k = os.environ.get("ZHIPU_API_KEY") or os.environ.get("GLM_API_KEY")
+        if k:
+            out.append(_make_zhipu(config, k))
+    if exclude_provider != "deepseek":
+        k = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
+        if k:
+            out.append(_make_deepseek(config, k))
+    return out

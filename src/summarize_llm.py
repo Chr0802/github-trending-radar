@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 
-from llm_client import chat_json, pick_list
+from llm_client import chat_json, fallback_settings, pick_list
 from summarize_rule import derive_metrics, summarize_rule
 
 # 注意：必须显式要求模型回填 full_name —— 下游靠它把结果映射回仓库对象。
@@ -48,20 +48,33 @@ def summarize_llm(repos: list[dict], config: dict, settings: dict) -> list[dict]
         },
     ]
 
-    data, model_used = chat_json(
-        messages,
-        provider=settings["provider"],
-        models=settings["models"],
-        base_url=settings["base_url"],
-        api_key=settings["api_key"],
-        headers=settings.get("headers"),
-        temperature=float(config.get("llm_temperature", 0.3)),
-        # 免费模型多为推理模型，max_tokens 太小会被 reasoning 吃光，正文返回空
-        max_tokens=int(config.get("llm_max_tokens", 4096)),
-        # 内容为空不算成功，交给调用层换模型重试，而不是整体降级到规则摘要
-        validate=lambda d: bool(pick_list(d)),
-    )
-    print(f"[llm] 摘要完成 · provider={settings['provider']} · model={model_used}")
+    data = None
+    model_used = ""
+    last_err = None
+    # 主 provider 失败时自动切下一个源（智谱 → OpenRouter → DeepSeek）
+    for s in [settings] + fallback_settings(config, settings["provider"]):
+        try:
+            data, model_used = chat_json(
+                messages,
+                provider=s["provider"],
+                models=s["models"],
+                base_url=s["base_url"],
+                api_key=s["api_key"],
+                headers=s.get("headers"),
+                temperature=float(config.get("llm_temperature", 0.3)),
+                # 免费模型多为推理模型，max_tokens 太小会被 reasoning 吃光，正文返回空
+                max_tokens=int(config.get("llm_max_tokens", 4096)),
+                # 内容为空不算成功，交给调用层换模型重试，而不是整体降级到规则摘要
+                validate=lambda d: bool(pick_list(d)),
+            )
+            print(f"[llm] 摘要完成 · provider={s['provider']} · model={model_used}")
+            break
+        except Exception as e:  # noqa: BLE001
+            last_err = e
+            print(f"[llm] provider={s['provider']} 失败：{e}")
+
+    if data is None:
+        raise RuntimeError(f"所有 provider 均失败：{last_err}")
 
     arr = pick_list(data)
     if not arr:
