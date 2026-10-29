@@ -14,5 +14,21 @@
       "Significant-Gravitas/AutoGPT"
     ],
     "report_path": "output/reports/2026-10-28.html"
+  },
+  "2026-10-29": {
+    "date": "2026-10-29",
+    "repos": [
+      "morluto/rea",
+      "openclaw/openclaw",
+      "donnemartin/system-design-primer",
+      "obra/superpowers",
+      "affaan-m/ECC",
+      "NousResearch/hermes-agent",
+      "trimstray/the-book-of-secret-knowledge",
+      "n8n-io/n8n",
+      "firecrawl/firecrawl",
+      "Significant-Gravitas/AutoGPT"
+    ],
+    "report_path": "output/reports/2026-10-29.html"
   }
 }
