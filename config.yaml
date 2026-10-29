@@ -56,8 +56,10 @@ llm_models:
 # 想强制走 OpenRouter 可在 Actions Variables 设 LLM_PROVIDER=openrouter
 llm_zhipu_base_url: https://open.bigmodel.cn/api/paas/v4
 llm_zhipu_models:
-  - glm-4.7-flash   # 免费，200K 上下文，速度快
-  - glm-4.6         # 旗舰，质量更好（按量计费）
+  - glm-4.7-flash   # 免费，200K，速度快
+  - glm-4.5-flash   # 免费，128K，另一条额度
+  - glm-4.5-air     # 免费，131K
+  - glm-4.6         # 付费，质量更好（账户无余额会失败，放最后）
 
 # 免费模型多为推理模型：max_tokens 太小会被 reasoning 吃光，正文返回空
 llm_temperature: 0.3
