@@ -23,7 +23,10 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 def _headers(github_token: str | None) -> dict:
-    h = {"Accept": "application/vnd.github+json"}
+    h = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "github-trending-radar/1.0",
+    }
     if github_token:
         h["Authorization"] = f"Bearer {github_token}"
     return h
@@ -33,7 +36,7 @@ def fetch_oss_insight(
     languages: list[str],
     period: str = "past_week",
     per_lang: int = 15,
-    timeout: int = 20,
+    timeout: int = 10,
 ) -> dict[str, dict]:
     """按语言拉 OSS Insight 热门 repo。失败返回空 dict（回退 Search）。"""
     repos: dict[str, dict] = {}
@@ -70,7 +73,7 @@ def fetch_oss_insight(
 def fetch_github_search(
     topics: list[str],
     github_token: str | None = None,
-    per_topic: int = 10,
+    per_topic: int = 8,
     timeout: int = 20,
 ) -> dict[str, dict]:
     """按 topic 拉 GitHub Search，补领域标签与 enrich 字段。"""
@@ -85,8 +88,15 @@ def fetch_github_search(
             )
             r = requests.get(url, headers=headers, timeout=timeout)
             if r.status_code == 403:
-                print("[gh] 限流或未授权，跳过后续 topic")
-                break
+                remaining = r.headers.get("X-RateLimit-Remaining", "?")
+                reset = r.headers.get("X-RateLimit-Reset", "?")
+                has_token = "有" if github_token else "无"
+                print(
+                    f"[gh] 403 topic={topic} token={has_token} "
+                    f"remaining={remaining} reset={reset} body={r.text[:100]}"
+                )
+                time.sleep(5)
+                continue
             if r.status_code != 200:
                 print(f"[gh] topic={topic} 返回 {r.status_code}，跳过")
                 continue
@@ -114,7 +124,7 @@ def fetch_github_search(
                     "topic_tag": topic,
                 }
             if github_token:
-                time.sleep(1)  # 避免限流
+                time.sleep(3)  # GitHub Search secondary rate limit 较严，拉开间隔
         except Exception as e:  # noqa: BLE001
             print(f"[gh] topic {topic} 失败: {e}")
     return repos
