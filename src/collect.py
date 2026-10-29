@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 import requests
 import yaml
@@ -159,6 +160,56 @@ def merge_and_rank(oss: dict, gh: dict, top_n: int = 10) -> list[dict]:
     return items[:top_n]
 
 
+TRENDING_URL = "https://github.com/trending"
+
+
+def fetch_github_trending(since: str = "weekly", timeout: int = 15) -> dict[str, dict]:
+    """抓 GitHub Trending 网页（真实趋势榜，无官方 API）。
+
+    以「本周新增 star」作为 score，这是最接近「近期热门」的信号。
+    HTML 结构变化时返回空 dict，由 OSS / Search 兜底。
+    """
+    repos: dict[str, dict] = {}
+    try:
+        r = requests.get(
+            f"{TRENDING_URL}?since={since}",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; trending-radar/1.0)"},
+            timeout=timeout,
+        )
+        if r.status_code != 200:
+            print(f"[trending] 返回 {r.status_code}，跳过")
+            return repos
+
+        for block in re.findall(r'<article class="Box-row">(.*?)</article>', r.text, re.S):
+            m = re.search(r'<h2[^>]*>.*?href="/([^"/\s]+/[^"/\s]+)"', block, re.S)
+            if not m:
+                continue
+            name = m.group(1).strip()
+
+            desc_m = re.search(r"<p[^>]*>(.*?)</p>", block, re.S)
+            desc = re.sub(r"<[^>]+>", "", desc_m.group(1)).strip() if desc_m else ""
+
+            lang_m = re.search(r'itemprop="programmingLanguage">([^<]+)<', block)
+            lang = lang_m.group(1).strip() if lang_m else ""
+
+            weekly_m = re.search(r"([\d,]+)\s+stars\s+(?:this|today)", block)
+            weekly = int(weekly_m.group(1).replace(",", "")) if weekly_m else 0
+
+            repos[name] = {
+                "full_name": name,
+                "language": lang,
+                "description": desc,
+                "html_url": f"https://github.com/{name}",
+                "stars_period": weekly,
+                "score": float(weekly),
+                "source": "github_trending",
+            }
+        print(f"[trending] 抓到 {len(repos)} 个")
+    except Exception as e:  # noqa: BLE001
+        print(f"[trending] 抓取失败: {e}")
+    return repos
+
+
 def fetch_readme(
     full_name: str, github_token: str | None = None, max_chars: int = 2000
 ) -> str:
@@ -176,9 +227,27 @@ def fetch_readme(
 
 
 def collect(config: dict, github_token: str | None = None) -> list[dict]:
+    trending = fetch_github_trending()
     oss = fetch_oss_insight(config.get("languages", []))
     gh = fetch_github_search(config.get("topics", []), github_token=github_token)
-    top = merge_and_rank(oss, gh, config.get("top_n", 10))
+
+    # 合并优先级：GitHub Trending（真实趋势）> OSS Insight > Search
+    merged: dict[str, dict] = {}
+    for src in (trending, oss, gh):
+        for name, r in src.items():
+            if name not in merged:
+                merged[name] = dict(r)
+            else:
+                for k, v in r.items():
+                    if merged[name].get(k) in (None, "", 0):
+                        merged[name][k] = v
+
+    items = list(merged.values())
+    items.sort(
+        key=lambda x: (x.get("score", 0), x.get("stars_total", 0)), reverse=True
+    )
+    top = items[: config.get("top_n", 10)]
+
     # 只给最终入选的项目抓 README，控制请求量与耗时
     for r in top:
         r["readme"] = fetch_readme(r["full_name"], github_token)
