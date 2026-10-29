@@ -12,11 +12,13 @@ from summarize_rule import derive_metrics, summarize_rule
 # 注意：必须显式要求模型回填 full_name —— 下游靠它把结果映射回仓库对象。
 # 早期版本没写这一句，模型经常自己编仓库名，导致字段全部落空。
 SYSTEM = (
-    "你是资深开源项目分析师。对给定的 GitHub 仓库列表，输出 JSON 对象 "
+    "你是资深开源项目分析师。对给定的 GitHub 仓库列表（含 README 摘录），输出 JSON 对象 "
     '{"repos": [...]}，数组长度和顺序必须与输入一致，每个元素含：'
     "full_name(原样回填输入的仓库全名，不得改写)、"
     "domain(中文领域标签，如 人工智能/大语言模型/安全/DevOps/Web开发)、"
-    "summary(2-3 句中文简介，说清它做什么、解决什么痛点、适合谁)、"
+    "summary(4-6 句中文深度介绍，必须结合 README 与 description，依次讲清：① 它是什么、解决什么痛点；"
+    "② 核心能力或技术亮点；③ 适合谁、典型使用场景；④ 如何上手（若 README 有安装/命令，用一句话概括）)、"
+    "highlights(2-4 条中文短句，每条不超过 22 字，提炼最关键的技术点或差异点；无则空数组)、"
     "hype_flags(风险红旗数组，如 已归档·可能停更/单维护者风险/描述偏营销化；无风险给空数组)。"
     "严格只输出 JSON，不要 markdown 围栏，不要多余文字。"
 )
@@ -31,6 +33,7 @@ def summarize_llm(repos: list[dict], config: dict, settings: dict) -> list[dict]
             "stars": (r.get("stars_total", 0) or r.get("stars_period", 0) or 0),
             "topics": r.get("topics", []),
             "archived": r.get("archived", False),
+            "readme": (r.get("readme") or "")[:1800],
         }
         for r in repos
     ]
@@ -52,7 +55,7 @@ def summarize_llm(repos: list[dict], config: dict, settings: dict) -> list[dict]
         headers=settings.get("headers"),
         temperature=float(config.get("llm_temperature", 0.3)),
         # 免费模型多为推理模型，max_tokens 太小会被 reasoning 吃光，正文返回空
-        max_tokens=int(config.get("llm_max_tokens", 2048)),
+        max_tokens=int(config.get("llm_max_tokens", 4096)),
         # 内容为空不算成功，交给调用层换模型重试，而不是整体降级到规则摘要
         validate=lambda d: bool(pick_list(d)),
     )
@@ -82,6 +85,7 @@ def summarize_llm(repos: list[dict], config: dict, settings: dict) -> list[dict]
                 **derive_metrics(base),
                 "hype_flags": item.get("hype_flags", []),
                 "summary": item.get("summary", base.get("summary", "")),
+                "highlights": item.get("highlights", []) or [],
             }
         )
 

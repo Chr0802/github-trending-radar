@@ -149,12 +149,30 @@ def merge_and_rank(oss: dict, gh: dict, top_n: int = 10) -> list[dict]:
     return items[:top_n]
 
 
+def fetch_readme(
+    full_name: str, github_token: str | None = None, max_chars: int = 2000
+) -> str:
+    """抓 README 前 max_chars 字符（raw 域名不占 GitHub API 限额）。失败返回空串。"""
+    headers = _headers(github_token)
+    for branch in ("HEAD", "main", "master"):
+        url = f"https://raw.githubusercontent.com/{full_name}/{branch}/README.md"
+        try:
+            r = requests.get(url, headers=headers, timeout=8)
+            if r.status_code == 200 and r.text:
+                return r.text[:max_chars]
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
+
+
 def collect(config: dict, github_token: str | None = None) -> list[dict]:
     oss = fetch_oss_insight(config.get("languages", []))
-    gh = fetch_github_search(
-        config.get("topics", []), github_token=github_token
-    )
-    return merge_and_rank(oss, gh, config.get("top_n", 10))
+    gh = fetch_github_search(config.get("topics", []), github_token=github_token)
+    top = merge_and_rank(oss, gh, config.get("top_n", 10))
+    # 只给最终入选的项目抓 README，控制请求量与耗时
+    for r in top:
+        r["readme"] = fetch_readme(r["full_name"], github_token)
+    return top
 
 
 if __name__ == "__main__":

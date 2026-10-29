@@ -59,7 +59,7 @@ llm_zhipu_models:
 
 # 免费模型多为推理模型：max_tokens 太小会被 reasoning 吃光，正文返回空
 llm_temperature: 0.3
-llm_max_tokens: 2048
+llm_max_tokens: 4096
 
 # 部署（GitHub Action 通过 Secrets 注入，不写在此文件）
 # DEPLOY_HOST / DEPLOY_USER / SSH_PRIVATE_KEY / CADDY_RELOAD_CMD

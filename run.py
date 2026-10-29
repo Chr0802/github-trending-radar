@@ -90,7 +90,8 @@ def main() -> None:
     history[today] = {
         "date": today,
         "repos": [r["full_name"] for r in repos],
-        "report_path": f"{cfg['report_dir']}/{today}.html",
+        # 相对站点根目录的路径（部署后 output/ 内容平铺到 /var/www/trending 根）
+        "report_path": f"reports/{today}.html",
     }
     save_history(hist_path, history)
 
