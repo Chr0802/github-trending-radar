@@ -85,6 +85,23 @@ def derive_metrics(repo: dict) -> dict:
     }
 
 
+def _pm_insight(repo: dict, domain: str) -> str:
+    """产品经理视角（规则兜底）：只基于可观察事实，避免空泛断言。"""
+    if repo.get("archived"):
+        return "项目已归档，更像某一类需求的早期验证样本，而非可直接借鉴的产品路径。"
+    stars = int(repo.get("stars_total", 0) or repo.get("stars_period", 0) or 0)
+    lang = repo.get("language") or "多语言"
+    if stars >= 10000:
+        return (
+            f"以「{domain}」场景切入，用 {lang} 生态和开源协作把单点能力做成可复用的基础设施；"
+            "可借鉴的是先建立标准或心智、再靠社区扩散的路径。"
+        )
+    return (
+        f"切的是「{domain}」里一个具体而窄的工具需求，靠低上手成本获得采用；"
+        "可借鉴的是聚焦单点、用文档和示例降低决策门槛。"
+    )
+
+
 def summarize_rule(repos: list[dict], config: dict | None = None) -> list[dict]:
     out = []
     for r in repos:
@@ -102,6 +119,7 @@ def summarize_rule(repos: list[dict], config: dict | None = None) -> list[dict]:
                 **derive_metrics(r),
                 "hype_flags": _hype_flags(r),
                 "summary": summary,
+                "pm_insight": _pm_insight(r, domain),
             }
         )
     return out

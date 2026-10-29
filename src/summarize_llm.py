@@ -19,6 +19,8 @@ SYSTEM = (
     "summary(4-6 句中文深度介绍，必须结合 README 与 description，依次讲清：① 它是什么、解决什么痛点；"
     "② 核心能力或技术亮点；③ 适合谁、典型使用场景；④ 如何上手（若 README 有安装/命令，用一句话概括）)、"
     "highlights(2-4 条中文短句，每条不超过 22 字，提炼最关键的技术点或差异点；无则空数组)、"
+    "pm_insight(2-3 句中文，从产品经理视角分析：① 它背后真实的用户需求是什么；② 产品定位或差异化在哪；"
+    "③ 可借鉴的产品方法（功能取舍/体验设计/增长路径）。要具体、结合 README，避免「要注重用户体验」这类空话)、"
     "hype_flags(风险红旗数组，如 已归档·可能停更/单维护者风险/描述偏营销化；无风险给空数组)。"
     "严格只输出 JSON，不要 markdown 围栏，不要多余文字。"
 )
@@ -86,6 +88,7 @@ def summarize_llm(repos: list[dict], config: dict, settings: dict) -> list[dict]
                 "hype_flags": item.get("hype_flags", []),
                 "summary": item.get("summary", base.get("summary", "")),
                 "highlights": item.get("highlights", []) or [],
+                "pm_insight": item.get("pm_insight", base.get("pm_insight", "")),
             }
         )
 

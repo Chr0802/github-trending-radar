@@ -62,6 +62,16 @@ def _highlights(r: dict) -> str:
     return f'<ul class="highlights">{lis}</ul>'
 
 
+def _pm_block(r: dict) -> str:
+    txt = (r.get("pm_insight") or "").strip()
+    if not txt:
+        return ""
+    return (
+        '<div class="pm"><span class="pm-tag">产品经理视角</span>'
+        f"<p>{_esc(txt)}</p></div>"
+    )
+
+
 def _card(r: dict, idx: int) -> str:
     stars = _stars(r)
     stars_s = f"{stars:,}"
@@ -76,6 +86,7 @@ def _card(r: dict, idx: int) -> str:
         <div class="badges">{_badges(r)}</div>
         <p class="summary">{_esc(r.get('summary', ''))}</p>
         {_highlights(r)}
+        {_pm_block(r)}
         <div class="metrics">
           <span><b>{stars_s}</b> stars</span>
           <span>{_esc(r.get('license') or '许可证未声明')}</span>
@@ -205,6 +216,15 @@ def _css() -> str:
       font-size:12.5px; color:var(--accent); background:rgba(94,234,212,.07);
       border:1px solid rgba(94,234,212,.2); border-radius:8px; padding:4px 10px;
     }}
+    .pm {{
+      margin-top:14px; padding:12px 14px; border-left:2px solid var(--accent);
+      background:rgba(94,234,212,.04); border-radius:0 var(--radius-sm) var(--radius-sm) 0;
+    }}
+    .pm-tag {{
+      display:block; font:600 10.5px/1 var(--mono); letter-spacing:.14em;
+      text-transform:uppercase; color:var(--accent); margin-bottom:6px;
+    }}
+    .pm p {{ margin:0; font-size:13.5px; line-height:1.72; color:#c3ccd8; }}
     .metrics {{
       display:flex; gap:20px; margin-top:14px; font-size:12.5px; color:var(--muted);
       font-variant-numeric:tabular-nums;
