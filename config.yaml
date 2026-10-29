@@ -26,6 +26,8 @@ topics:
 
 # 历史与输出路径（相对仓库根）
 history_file: data/history.json
+# Action 采集产物（实例读取后做摘要+生成）
+candidates_file: data/candidates.json
 output_dir: output
 report_dir: output/reports
 

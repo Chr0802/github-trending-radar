@@ -1,14 +1,20 @@
 """主流程：采集 → 摘要 → 跨期 diff → 写 history → 生成 HTML。
 
-用法：python run.py
+支持三种运行模式，配合「Action 采集 + 实例生成」的混合架构：
+  python run.py                    完整流程（本地调试用）
+  python run.py --collect-only     只采集，写 data/candidates.json（在 GitHub Action 跑）
+  python run.py --from-candidates  读 candidates.json 跳过采集，摘要+生成（在实例跑）
+
 环境变量：
-  GITHUB_TOKEN         可选，提升 GitHub Search API 限额
-  LLM_PROVIDER         可选，deepseek | openrouter；不填则按已注入的 Key 自动探测
-  OPENROUTER_API_KEY   可选，配置则走 OpenRouter（可用免费模型），否则规则摘要
-  LLM_API_KEY          可选，DeepSeek 等自有 provider 的 Key
+  GITHUB_TOKEN         可选，提升 GitHub Search API 限额（采集用）
+  LLM_PROVIDER         可选，zhipu | openrouter | deepseek；不填按 Key 自动探测
+  ZHIPU_API_KEY        可选，智谱 GLM
+  OPENROUTER_API_KEY   可选，OpenRouter
+  LLM_API_KEY          可选，DeepSeek 等自有 provider
 """
 from __future__ import annotations
 
+import argparse
 import datetime
 import json
 import os
@@ -45,7 +51,6 @@ def apply_diff(repos: list[dict], history: dict, today: str) -> list[dict]:
         name = r["full_name"]
         if name in prev_names:
             r["is_new"] = False
-            # 向前追溯连续在榜天数
             streak = 1
             cur = prev
             while True:
@@ -65,13 +70,47 @@ def apply_diff(repos: list[dict], history: dict, today: str) -> list[dict]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="github-trending-radar 主流程")
+    parser.add_argument(
+        "--collect-only", action="store_true", help="只采集，写 data/candidates.json"
+    )
+    parser.add_argument(
+        "--from-candidates", action="store_true", help="读 candidates.json，跳过采集"
+    )
+    args = parser.parse_args()
+
     cfg = load_config("config.yaml")
     token = os.environ.get("GITHUB_TOKEN")
+    today = datetime.date.today().isoformat()
+    cpath = cfg.get("candidates_file", "data/candidates.json")
+
+    # ---------- 阶段一：采集 ----------
+    if args.from_candidates:
+        with open(cpath, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        repos_raw = payload.get("repos", [])
+        print(
+            f"[1/4] 读取候选 {len(repos_raw)} 个"
+            f"（采集日期 {payload.get('date', '?')}）"
+        )
+    else:
+        print("[1/4] 采集热门项目...")
+        repos_raw = collect(cfg, token)
+
+    if args.collect_only:
+        os.makedirs(os.path.dirname(cpath), exist_ok=True)
+        with open(cpath, "w", encoding="utf-8") as f:
+            json.dump(
+                {"date": today, "repos": repos_raw},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
+        print(f"采集完成：{len(repos_raw)} 个 → {cpath}")
+        return
+
+    # ---------- 阶段二：摘要 ----------
     settings = resolve_settings(cfg)
-
-    print("[1/4] 采集热门项目...")
-    repos_raw = collect(cfg, token)
-
     if settings:
         desc = f"{settings['provider']} · {settings['models'][0]}"
         if len(settings["models"]) > 1:
@@ -81,10 +120,9 @@ def main() -> None:
     print(f"[2/4] 生成摘要（LLM={desc}）...")
     repos = summarize(repos_raw, cfg, settings)
 
-    today = datetime.date.today().isoformat()
+    # ---------- 阶段三：跨期 diff + 历史 ----------
     hist_path = cfg["history_file"]
     history = load_history(hist_path)
-
     print("[3/4] 跨期 diff + 写历史...")
     repos = apply_diff(repos, history, today)
     history[today] = {
@@ -95,6 +133,7 @@ def main() -> None:
     }
     save_history(hist_path, history)
 
+    # ---------- 阶段四：生成 HTML ----------
     print("[4/4] 生成 HTML...")
     generate.write_all(
         repos, today, history, cfg["output_dir"], cfg["report_dir"]
