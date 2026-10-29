@@ -1,16 +1,16 @@
-name: github-trending-radar
+name: github-trending-radar-collect
 
+# 只做采集：Action 网络好（美国），负责 OSS Insight / GitHub Search / README。
+# 摘要、生成、展示由实例上的 cron 完成（见 deploy/instance-run.sh）。
 on:
-  schedule:
-    # 北京时间 06:00 = UTC 22:00（前一日）
-    - cron: "0 22 * * *"
+  # 不依赖 GitHub schedule（不可靠），由实例 cron 每天 5:55 触发 workflow_dispatch
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  collect:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -23,39 +23,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Collect & Build
+      - name: Collect candidates only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # 二选一，都不配则走代码规则摘要（不依赖任何 LLM）
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}  # 免费模型，推荐
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}                # DeepSeek 等自有 key
-          # 可留空由 config.yaml 的 auto 自动探测；也可强制指定 deepseek / openrouter
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
-          PYTHONUNBUFFERED: "1"        # 实时输出日志，避免看起来「卡住」
-          LLM_BUDGET_SECONDS: "240"    # LLM 总耗时预算（秒），超时自动降级规则摘要
-        run: python -u run.py
+          PYTHONUNBUFFERED: "1"
+        run: python -u run.py --collect-only
 
-      - name: Commit history & reports
+      - name: Commit candidates
         run: |
           git config user.name "github-trending-radar[bot]"
           git config user.email "bot@users.noreply.github.com"
-          git add data/history.json output/
-          git commit -m "chore: daily update $(date +%F)" || echo "no changes"
-          # 重试 + rebase：避免与手动 push 并发导致 non-fast-forward 被拒
+          git add data/candidates.json
+          git commit -m "chore: candidates $(date +%F)" || echo "no changes"
           for i in 1 2 3; do
             git pull --rebase origin main && git push && break
             echo "push 失败，第 $i 次重试"; sleep 5
           done
 
-      # 兜底：即使上面 push 失败，报告也能从 Actions 页面下载（保留 7 天）
-      - name: Upload report artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trending-report
-          path: output/
-          retention-days: 7
-
-      # 部署方式：实例主动拉取（不需 SSH）。
-      # Action 只负责把报告 push 到公开仓库；实例上的 cron 定时 git pull 到
-      # /var/www/trending，由 Caddy :8080 直接服务。参见 README「实例拉取」。
+      # 说明：本 workflow 不跑 LLM、不生成 HTML、不部署。
+      # 实例侧每 2 分钟检查 data/candidates.json 是否有更新，有则生成并写入 Caddy 根目录。
