@@ -49,6 +49,14 @@ llm_models:
   - cohere/north-mini-code:free              # 代码向，较慢
   - openrouter/free                          # 路由器，自动挑可用免费模型
 
+# 智谱 GLM（国内低延迟、中文强；glm-4.7-flash 免费 200K）
+# auto 模式下若同时存在 ZHIPU_API_KEY 与 OPENROUTER_API_KEY，优先 zhipu；
+# 想强制走 OpenRouter 可在 Actions Variables 设 LLM_PROVIDER=openrouter
+llm_zhipu_base_url: https://open.bigmodel.cn/api/paas/v4
+llm_zhipu_models:
+  - glm-4.7-flash   # 免费，200K 上下文，速度快
+  - glm-4.6         # 旗舰，质量更好（按量计费）
+
 # 免费模型多为推理模型：max_tokens 太小会被 reasoning 吃光，正文返回空
 llm_temperature: 0.3
 llm_max_tokens: 2048

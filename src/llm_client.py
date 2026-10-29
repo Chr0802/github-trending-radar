@@ -33,6 +33,13 @@ OPENROUTER_FREE_MODELS = [
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
+ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"   # 智谱 GLM，OpenAI 兼容
+
+# 智谱 GLM 候选（2026-10-29）：glm-4.7-flash 免费且 200K 上下文，适合日报摘要
+ZHIPU_FREE_MODELS = [
+    "glm-4.7-flash",   # 免费，200K 上下文，速度快
+    "glm-4.6",         # 旗舰，质量更好（按量计费）
+]
 
 # 命中即换模型：换模型比重试更有意义
 SWITCH_ON = {402, 403, 404, 500, 502, 503, 504}
@@ -227,10 +234,14 @@ def resolve_settings(config: dict) -> dict | None:
         provider = ""  # 交给下面的自动探测
 
     openrouter_key = os.environ.get("OPENROUTER_API_KEY")
+    zhipu_key = os.environ.get("ZHIPU_API_KEY") or os.environ.get("GLM_API_KEY")
     deepseek_key = os.environ.get("LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
 
     if not provider:
-        if openrouter_key:
+        # 自动探测顺序：智谱（国内低延迟、中文强）→ OpenRouter（免费）→ DeepSeek
+        if zhipu_key:
+            provider = "zhipu"
+        elif openrouter_key:
             provider = "openrouter"
         elif deepseek_key:
             provider = "deepseek"
@@ -259,6 +270,21 @@ def resolve_settings(config: dict) -> dict | None:
                     "OPENROUTER_SITE_NAME", "github-trending-radar"
                 ),
             },
+        }
+
+    if provider == "zhipu":
+        if not zhipu_key:
+            print("[llm] 选择了 zhipu 但缺少 ZHIPU_API_KEY，回退规则摘要")
+            return None
+        models = [m for m in (config.get("llm_zhipu_models") or []) if m]
+        if not models:
+            models = list(ZHIPU_FREE_MODELS)
+        return {
+            "provider": "zhipu",
+            "models": list(models),
+            "base_url": config.get("llm_zhipu_base_url") or ZHIPU_BASE_URL,
+            "api_key": zhipu_key,
+            "headers": None,
         }
 
     # 其余（deepseek 等）走通用 OpenAI 兼容配置
